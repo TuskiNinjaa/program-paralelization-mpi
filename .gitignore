@@ -1,6 +1,9 @@
 # Folder
 Arquivos
 
+# Compiled files
+histograma_seq
+
 # Prerequisites
 *.d
 
