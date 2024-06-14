@@ -8,6 +8,7 @@ conda env create -f pp_mpi.yml
 
 # Unzip inputs and outputs files
 ```console
+unzip Arquivos.zip
 ```
 
 # Test script
