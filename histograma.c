@@ -105,6 +105,8 @@ int main(int argc, char **argv)
 {
 	int idProcesso,
 		nProcessos,
+		min,
+		max,
 		minLocal,
 		maxLocal,
 		l;
@@ -119,9 +121,7 @@ int main(int argc, char **argv)
 		// Inicialização -----------------------------------------------------------
 
 		int n, // Número de elementos do vetor de entrada
-			m, // Número de intervalos do histograma
-			min,
-			max;
+			m; // Número de intervalos do histograma
 
 		if (argc != 3)
 		{
@@ -135,10 +135,11 @@ int main(int argc, char **argv)
 		// Aloca vetores para dados de entrada e saída
 		int *v = (int *)malloc(n * sizeof(int));				// Vetor de entrada com n elementos
 		int *h = (int *)malloc(m * sizeof(int));				// Histograma de saída com m elementos
+		int *hPart = (int *)malloc(m * sizeof(int));			// Histograma auxiliar com mPart elementos
 		int *tamanho = (int *)malloc(nProcessos * sizeof(int)); // Vetor de tamanhos dos subvetores usados por cada processo
 		int *posicao = (int *)malloc(nProcessos * sizeof(int)); // Posição inicial da parte do vetor de entrada (e depois de saída) de cada processo
 
-		if ((v == NULL) || (h == NULL) || (tamanho == NULL) || (posicao == NULL))
+		if ((v == NULL) || (h == NULL) || (hPart == NULL) || (tamanho == NULL) || (posicao == NULL))
 		{
 			printf("\nErro na alocação de estruturas\n");
 			MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
@@ -178,27 +179,17 @@ int main(int argc, char **argv)
 		// Atualiza o valor do n para o subvetor acessado pelo processo RAIZ
 		n = tamanho[0];
 
-		// Histograma auxiliar com mPart elementos
-		int *hPart = (int *)malloc(m * sizeof(int));
-
-		if (hPart == NULL)
-		{
-			printf("\nErro na alocação de estruturas\n");
-			MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-		}
-
 		// Calcula valores mínimo e máximo do vetor de entrada
 		minimo_maximo(n, &minLocal, &maxLocal, v);
 
-		MPI_Reduce(&minLocal, &min, 1, MPI_INT, MPI_MIN, RAIZ, MPI_COMM_WORLD);
-		MPI_Reduce(&maxLocal, &max, 1, MPI_INT, MPI_MAX, RAIZ, MPI_COMM_WORLD);
+		MPI_Allreduce(&minLocal, &min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		MPI_Allreduce(&maxLocal, &max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
 		// Calcula largura da faixa de valores de cada intervalo do histograma
 		l = (max - min + 1) / m;
-		MPI_Bcast(&l, 1, MPI_INT, RAIZ, MPI_COMM_WORLD);
 
 		// Calcula histograma
-		histograma(n, m, minLocal, l, v, hPart);
+		histograma(n, m, min, l, v, hPart);
 
 		MPI_Reduce(hPart, h, m, MPI_INT, MPI_SUM, RAIZ, MPI_COMM_WORLD);
 
@@ -220,7 +211,9 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		int nPart, mPart;
+		int nPart,
+			mPart;
+			
 		// Recebe número de elementos da parte do vetor de entrada desse processo
 		MPI_Scatter(NULL, 1, MPI_INT, &nPart, 1, MPI_INT, RAIZ, MPI_COMM_WORLD);
 		MPI_Bcast(&mPart, 1, MPI_INT, RAIZ, MPI_COMM_WORLD);
@@ -241,13 +234,14 @@ int main(int argc, char **argv)
 		// Calcula valores mínimo e máximo do vetor de entrada
 		minimo_maximo(nPart, &minLocal, &maxLocal, vPart);
 
-		MPI_Reduce(&minLocal, NULL, 1, MPI_INT, MPI_MIN, RAIZ, MPI_COMM_WORLD);
-		MPI_Reduce(&maxLocal, NULL, 1, MPI_INT, MPI_MAX, RAIZ, MPI_COMM_WORLD);
+		MPI_Allreduce(&minLocal, &min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		MPI_Allreduce(&maxLocal, &max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
-		MPI_Bcast(&l, 1, MPI_INT, RAIZ, MPI_COMM_WORLD);
+		// Calcula largura da faixa de valores de cada intervalo do histograma
+		l = (max - min + 1) / mPart;
 
 		// Calcula histograma
-		histograma(nPart, mPart, minLocal, l, vPart, hPart);
+		histograma(nPart, mPart, min, l, vPart, hPart);
 
 		MPI_Reduce(hPart, NULL, mPart, MPI_INT, MPI_SUM, RAIZ, MPI_COMM_WORLD);
 
